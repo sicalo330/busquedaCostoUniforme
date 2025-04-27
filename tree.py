@@ -2,32 +2,45 @@ import heapq
 import networkx as nx
 import matplotlib.pyplot as plt
 import random
+import time
 
-# --- Funciones para construir un árbol jerárquico ---
-def generar_arbol_jerarquico(profundidad, hijos_minimos):
+# --- Funciones para cargar el grafo desde archivo ---
+def cargar_grafo_desde_archivo(nombre_archivo):
+    """
+    Carga un grafo desde un archivo de texto y reconstruye su estructura jerárquica.
+    Formato del archivo:
+        origen destino peso
+        origen destino peso
+        ...
+    """
     grafo = {}
-    contador_nodos = 1#Se empieza con el nodo 1
-    niveles = [[str(contador_nodos)]]
-    grafo[str(contador_nodos)] = []
+    niveles = {}  # Diccionario para reconstruir niveles: {nivel: [nodos]}
+    
+    with open(nombre_archivo, 'r') as archivo:
+        lineas = archivo.readlines()
+        
+        # Primera pasada: construir el grafo básico
+        for linea in lineas:
+            if linea.strip():
+                origen, destino, peso = linea.strip().split()
+                grafo.setdefault(origen, []).append((destino, int(peso)))
+                grafo.setdefault(destino, [])  # Asegurar que los destinos existan
+        
+        # Segunda pasada: reconstruir niveles (asumiendo que el archivo está ordenado por niveles)
+        niveles[0] = ['1']  # La raíz siempre es '1'
+        for linea in lineas:
+            origen, destino, _ = linea.strip().split()
+            nivel_padre = next((k for k, v in niveles.items() if origen in v), None)
+            if nivel_padre is not None:
+                nivel_hijo = nivel_padre + 1
+                niveles.setdefault(nivel_hijo, []).append(destino)
+    
+    # Convertir el diccionario de niveles a una lista ordenada
+    niveles_ordenados = [niveles[i] for i in sorted(niveles.keys())]
+    return grafo, niveles_ordenados
 
-    for nivel in range(profundidad):#Iterará la misma cantidad de veces de la profundidad seleccionada
-        nuevo_nivel = []
-        for nodo in niveles[-1]:#Este ciclo lo que hace es almacenar una lista de datos en donde estarán los numeros de cada nivel ['1'],['2','3','4','5'] en el caso de que la cantidad de hijos por nodo fueran 4
-            # num_hijos = random.randint(hijos_minimos, hijos_minimos + 2)#Aquí se generan los hijos
-            for i in range(hijos_minimos):#Lo que hará el for es darle hijos al nodo que esté seleccionado
-                #El contador de hijos aumenta en uno, es decir que si se empezó en 1, se incrementa a 2, y con este número se bautiza el siguiente nodo
-                contador_nodos += 1
-                hijo = str(contador_nodos)
-                peso = random.randint(1, 10)
-                grafo[nodo].append((hijo, peso))#Aún no entiendo del todo qué hace esto
-                print(nodo)
-                print(grafo[nodo])
-                grafo[hijo] = []
-                nuevo_nivel.append(hijo)#Esta parte es importante ya que almacena los números que tendrá cada nivel de esta forma ['2','3','4'] esto si el número de hijos por nodo es 3
-        niveles.append(nuevo_nivel)
-    return grafo, niveles
 
-# --- Búsqueda de Costo Uniforme ---
+# --- Búsqueda de Costo Uniforme (sin cambios) ---
 def busqueda_costo_uniforme(grafo, inicio, objetivo):
     frontera = [(0, inicio)]
     visitados = set()
@@ -47,7 +60,6 @@ def busqueda_costo_uniforme(grafo, inicio, objetivo):
 
         if nodo_actual not in visitados:
             visitados.add(nodo_actual)
-
             for vecino, costo in grafo.get(nodo_actual, []):
                 nuevo_costo = costo_actual + costo
                 if vecino not in costos or nuevo_costo < costos[vecino]:
@@ -55,15 +67,14 @@ def busqueda_costo_uniforme(grafo, inicio, objetivo):
                     heapq.heappush(frontera, (nuevo_costo, vecino))
                     padres[vecino] = nodo_actual
                     arbol_busqueda.add_edge(nodo_actual, vecino, weight=costo)
-
     return None, None, arbol_busqueda
 
-# --- Funciones para graficar de forma jerárquica ---
+# --- Graficar árbol (con resaltado de camino) ---
 def graficar_arbol_jerarquico(grafo, niveles, camino=None):
-    arbol = nx.DiGraph()
+    G = nx.DiGraph()
     for nodo, vecinos in grafo.items():
         for vecino, peso in vecinos:
-            arbol.add_edge(nodo, vecino, weight=peso)
+            G.add_edge(nodo, vecino, weight=peso)
 
     pos = {}
     y = 0
@@ -76,64 +87,34 @@ def graficar_arbol_jerarquico(grafo, niveles, camino=None):
         y += 1
 
     # Colores para resaltar el camino
-    edge_colors = []
-    node_colors = []
-    
-    if camino:
-        aristas_camino = set(zip(camino[:-1], camino[1:]))  # Pares de nodos del camino
-    else:
-        aristas_camino = set()
+    edge_colors = ['red' if (u, v) in zip(camino[:-1], camino[1:]) else 'black' for u, v in G.edges()]
+    node_colors = ['lightcoral' if nodo in camino else 'lightblue' for nodo in G.nodes()]
 
-    for edge in arbol.edges():
-        if edge in aristas_camino:
-            edge_colors.append('red')
-        else:
-            edge_colors.append('black')
-
-    for node in arbol.nodes():
-        if camino and node in camino:
-            node_colors.append('lightcoral')
-        else:
-            node_colors.append('lightblue')
-
-    edge_labels = nx.get_edge_attributes(arbol, 'weight')
-    plt.figure(figsize=(16, 12))
-    nx.draw(arbol, pos, with_labels=True, node_color=node_colors,
-            node_size=800, font_size=10, arrows=True, edge_color=edge_colors)
-    nx.draw_networkx_edge_labels(arbol, pos, edge_labels=edge_labels)
-    plt.title("Árbol Jerárquico" + (" (camino resaltado)" if camino else ""))
+    plt.figure(figsize=(12, 8))
+    nx.draw(G, pos, with_labels=True, node_color=node_colors, edge_color=edge_colors,
+            node_size=800, font_size=10, arrows=True)
+    nx.draw_networkx_edge_labels(G, pos, edge_labels=nx.get_edge_attributes(G, 'weight'))
+    plt.title("Árbol desde archivo" + (" (camino resaltado)" if camino else ""))
+    fin_tiempo = time.time()
+    print(f"\nTiempo de ejecución: {fin_tiempo - inicio_tiempo:.4f} segundos")
     plt.show()
-
-def cargar_grafo_desde_archivo(nombre_archivo):
-    grafo = {}
-    with open(nombre_archivo, 'r') as archivo:
-        for linea in archivo:
-            partes = linea.strip().split()
-            if len(partes) == 3:
-                origen, destino, peso = partes
-                grafo.setdefault(origen, []).append((destino, int(peso)))
-                grafo.setdefault(destino, [])  # Asegurar que el destino también esté en el grafo
-    return grafo
-
 
 # --- Main ---
 if __name__ == "__main__":
-    profundidad = int(input("Ingrese la cantidad de la profundidad del árbol: ")) 
-    hijos_minimos = int(input("Ingrese la cantidad de hijos por nodo: ")) 
-    grafo, niveles = generar_arbol_jerarquico(profundidad, hijos_minimos)
+    nombre_archivo = input("Ingrese el nombre del archivo (ej: grafo): ")
+    inicio = input("Ingrese el nodo de inicio: ")
+    objetivo = input("Ingrese el nodo ojetivo: ")
+    inicio_tiempo = time.time()
+    grafo, niveles = cargar_grafo_desde_archivo(nombre_archivo + '.txt')
 
-    inicio = '1'
-    hojas = [nodo for nodo, vecinos in grafo.items() if len(vecinos) == 0]
-    objetivo = random.choice(hojas)
+    hojas = [nodo for nodo in grafo if not grafo[nodo]]  # Nodos sin hijos
 
-    print(f"\nNodo de inicio: {inicio}")
-    print(f"Nodo objetivo (hoja aleatoria): {objetivo}")
-
-    camino, costo_total, arbol_busqueda = busqueda_costo_uniforme(grafo, inicio, objetivo)
+    print(f"\nNodo objetivo (aleatorio): {objetivo}")
+    camino, costo, _ = busqueda_costo_uniforme(grafo, inicio, objetivo)
 
     if camino:
-        print("\nCamino encontrado:", camino)
-        print("Costo total:", costo_total)
-        graficar_arbol_jerarquico(grafo, niveles, camino)  # ¡Aquí pasamos el camino!
+        print(f"Camino: {' -> '.join(camino)}")
+        print(f"Costo total: {costo}")
+        graficar_arbol_jerarquico(grafo, niveles, camino)
     else:
-        print("No se encontró un camino entre los nodos.")
+        print("No se encontró camino al objetivo.")
