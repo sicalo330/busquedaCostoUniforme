@@ -101,11 +101,10 @@ def graficar_arbol_jerarquico(grafo, niveles, camino=None):
 
 # --- Main ---
 if __name__ == "__main__":
-    nombre_archivo = input("Ingrese el nombre del archivo (ej: grafo): ")
     inicio = input("Ingrese el nodo de inicio: ")
     objetivo = input("Ingrese el nodo ojetivo: ")
     inicio_tiempo = time.time()
-    grafo, niveles = cargar_grafo_desde_archivo(nombre_archivo + '.txt')
+    grafo, niveles = cargar_grafo_desde_archivo("datos.txt")
 
     hojas = [nodo for nodo in grafo if not grafo[nodo]]  # Nodos sin hijos
 
